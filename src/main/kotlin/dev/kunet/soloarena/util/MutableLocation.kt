@@ -1,10 +1,30 @@
 package dev.kunet.soloarena.util
 
-import kotlin.math.abs
-import kotlin.math.roundToInt
+import kotlin.math.*
 
-data class MutableLocation(var x: Double, var y: Double, var z: Double, var yaw: Float = 0f, var pitch: Float = 0f) {
+data class MutableLocation(
+    var x: Double = 0.0,
+    var y: Double = 0.0,
+    var z: Double = 0.0,
+    var yaw: Float = 0f,
+    var pitch: Float = 0f
+) {
     fun toPELocation() = com.github.retrooper.packetevents.protocol.world.Location(x, y, z, yaw, pitch)
+
+    operator fun plus(other: MutableLocation): MutableLocation {
+        return MutableLocation(x + other.x, y + other.y, z + other.z, yaw, pitch)
+    }
+
+    operator fun times(other: MutableLocation): MutableLocation {
+        return MutableLocation(x * other.x, y * other.y, z * other.z, yaw, pitch)
+    }
+
+    fun distance(other: MutableLocation): Double {
+        val x = x - other.x
+        val y = y - other.y
+        val z = z - other.z
+        return sqrt(x * x + y * y + z * z)
+    }
 }
 
 class IntLocation(

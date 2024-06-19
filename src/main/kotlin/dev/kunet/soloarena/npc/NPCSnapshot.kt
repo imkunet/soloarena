@@ -19,12 +19,16 @@ fun Player.npcSnapshot(): NPCSnapshot {
 
         isSneaking,
         isSprinting,
+        isBlocking,
+
         // literally the only valid use of onGround like ever
         // except in like anti-cheats I guess :(
         isOnGround,
 
         item.type.id,
         item.data.data,
+
+        false,
     )
 }
 
@@ -37,10 +41,14 @@ data class NPCSnapshot(
 
     var sneaking: Boolean = false,
     var sprinting: Boolean = false,
+    var blocking: Boolean = false,
+
     var onGround: Boolean = true,
 
     var itemInHand: Int = 0,
     var itemInHandData: Byte = 0,
+
+    var hitTick: Boolean = false,
 ) {
     fun write(output: ObjectOutputStream) {
         output.writeInt(intX)
@@ -51,10 +59,14 @@ data class NPCSnapshot(
 
         output.writeBoolean(sneaking)
         output.writeBoolean(sprinting)
+        output.writeBoolean(blocking)
+
         output.writeBoolean(onGround)
 
         output.writeInt(itemInHand)
         output.writeByte(itemInHandData.toInt())
+
+        output.writeBoolean(hitTick)
     }
 
     fun read(input: ObjectInputStream) {
@@ -66,9 +78,13 @@ data class NPCSnapshot(
 
         sneaking = input.readBoolean()
         sprinting = input.readBoolean()
+        blocking = input.readBoolean()
+
         onGround = input.readBoolean()
 
         itemInHand = input.readInt()
         itemInHandData = input.readByte()
+
+        hitTick = input.readBoolean()
     }
 }

@@ -31,9 +31,9 @@ dependencies {
     implementation("com.github.shynixn.mccoroutine:mccoroutine-bukkit-core:2.16.0")
 
     implementation("fr.mrmicky:fastboard:2.1.2")
-    implementation("fr.mrmicky:FastParticles:2.0.1")
-
     implementation("com.github.retrooper.packetevents:spigot:2.3.0")
+
+    implementation("org.lz4:lz4-java:1.8.0")
 }
 
 kotlin {

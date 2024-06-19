@@ -1,14 +1,21 @@
 package dev.kunet.soloarena.command
 
 import dev.kunet.soloarena.SoloArenaPlugin
+import dev.kunet.soloarena.arena.mech.animateCone
 import dev.kunet.soloarena.npc.NPC
 import dev.kunet.soloarena.npc.NPCSnapshot
 import dev.kunet.soloarena.npc.npcSnapshot
 import dev.kunet.soloarena.util.*
+import net.jpountz.lz4.LZ4FrameInputStream
+import net.jpountz.lz4.LZ4FrameOutputStream
+import net.md_5.bungee.api.chat.ClickEvent
 import org.bukkit.entity.Player
 import org.bukkit.event.EventHandler
 import org.bukkit.event.HandlerList
 import org.bukkit.event.Listener
+import org.bukkit.event.block.Action
+import org.bukkit.event.player.PlayerAnimationEvent
+import org.bukkit.event.player.PlayerInteractEvent
 import java.io.*
 
 fun SoloArenaPlugin.registerTestCommands() {
@@ -43,6 +50,7 @@ fun SoloArenaPlugin.registerTestCommands() {
             testRecorder?.let {
                 it.endRecording()
                 unregisterEvents(it)
+                testRecorder = null
                 return@ctx
             }
 
@@ -78,32 +86,103 @@ fun SoloArenaPlugin.registerTestCommands() {
             }
 
             val replayFile = File(fileName)
-            registerEventsSync(TestPlayback(player, replayFile))
+            registerEventsSync(TestPlayback(player, replayFile, "${++furinaCount}"))
             sender.send("&aPlaying back...".comp())
         }
+    }
+
+    createCommand("gogogo") {
+        tabCompleter = {
+            when (subArgs.size) {
+                0, 1 -> File(".").listFiles()?.filter { it.name.endsWith(".move.brawl") }?.map { it.name }
+                    ?: emptyCompleter(this)
+
+                else -> emptyCompleter(this)
+            }
+        }
+
+        executor = ctx@{
+            val player = ensurePlayer()
+
+            val fileName = subArgs.getOrNull(0)
+            if (fileName.isNullOrEmpty()) {
+                sender.send("&cSpecify a valid replay name".comp())
+                return@ctx
+            }
+
+            if (!fileName.startsWith("recording-") || !fileName.endsWith(".move.brawl")) {
+                sender.send("&cSpecify a valid replay name".comp())
+                return@ctx
+            }
+
+            registerEventsSync(GoEr(fileName, player, this@registerTestCommands))
+            sender.send("&aPlaying back...".comp())
+        }
+    }
+
+    createCommand("cone") {
+        executor = {
+            val player = ensurePlayer()
+            animateCone(player.world, player.location.toMutableLocation(), player.isSneaking)
+        }
+    }
+}
+
+class GoEr(val fileName: String, val player: Player, val plugin: SoloArenaPlugin) : Listener {
+    private var count = 0
+
+    @EventHandler
+    private fun onTick(event: TickEvent) {
+        if (count > 250) {
+            HandlerList.unregisterAll(this)
+            return
+        }
+
+        val replayFile = File(fileName)
+        plugin.registerEventsSync(TestPlayback(player, replayFile, "${++count}"))
     }
 }
 
 class TestRecorder(val player: Player) : Listener {
     val fileName = "recording-${System.currentTimeMillis()}.move.brawl"
+    val outputStream = ObjectOutputStream(LZ4FrameOutputStream(FileOutputStream(fileName)))
 
-    val objectOutputStream = ObjectOutputStream(FileOutputStream(fileName))
+    var isSwingTick = false
 
     @EventHandler
     private fun onTick(event: TickEvent) {
-        player.npcSnapshot().write(objectOutputStream)
+        val npcSnapshot = player.npcSnapshot()
+        npcSnapshot.hitTick = isSwingTick
+        isSwingTick = false
+        npcSnapshot.write(outputStream)
+    }
+
+    @EventHandler
+    private fun onSwing(event: PlayerInteractEvent) {
+        if (event.action != Action.LEFT_CLICK_AIR && event.action != Action.LEFT_CLICK_BLOCK) return
+        isSwingTick = true
+    }
+
+    @EventHandler
+    private fun onAnimation(event: PlayerAnimationEvent) {
+        isSwingTick = true
     }
 
     fun endRecording() {
-        objectOutputStream.close()
-
-        player.send("&aSaved to $fileName".comp())
+        outputStream.close()
+        player.send(
+            "&aSaved to $fileName. ".comp()
+                    + "&9&nClick to play".comp()
+                .setAction(ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/testplayback $fileName"))
+                    + " &9&nBrainrot".comp()
+                .setAction(ClickEvent(ClickEvent.Action.SUGGEST_COMMAND, "/gogogo $fileName"))
+        )
     }
 }
 
-class TestPlayback(val player: Player, val replayFile: File) : Listener {
-    val npc: NPC = NPC("〠 furina ↈ", player.location.toMutableLocation(), FurinaSkin)
-    val inputStream = ObjectInputStream(FileInputStream(replayFile))
+class TestPlayback(val player: Player, val replayFile: File, val name: String) : Listener {
+    val npc: NPC = NPC(name, player.location.toMutableLocation(), if (Math.random() > 0.5) FurinaSkin else HuTaoSkin)
+    val inputStream = ObjectInputStream(LZ4FrameInputStream(FileInputStream(replayFile)))
 
     var isObserving = false
 

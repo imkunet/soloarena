@@ -5,6 +5,7 @@ import org.bukkit.Bukkit
 import org.bukkit.event.EventHandler
 import org.bukkit.event.Listener
 import org.bukkit.event.world.WorldInitEvent
+import org.bukkit.util.Vector
 
 class UniversalListeners : Listener {
     @EventHandler
@@ -37,6 +38,15 @@ class UniversalListeners : Listener {
 
             world.weatherDuration = Int.MAX_VALUE
             world.thunderDuration = Int.MAX_VALUE
+        }
+    }
+
+    @EventHandler
+    private fun onTick2(event: TickEvent) {
+        if (event.tickNumber % 20L != 0L) return
+        for (player in Bukkit.getWorlds()[0].players) {
+            player.damage(0.000001)
+            if (player.velocity.y < 0) player.velocity = player.velocity.multiply(Vector(0.0, 2.0, 0.0))
         }
     }
 }

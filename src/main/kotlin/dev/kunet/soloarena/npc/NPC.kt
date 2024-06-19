@@ -2,11 +2,12 @@ package dev.kunet.soloarena.npc
 
 import com.github.retrooper.packetevents.protocol.entity.data.EntityData
 import com.github.retrooper.packetevents.protocol.entity.data.EntityDataTypes
-import com.github.retrooper.packetevents.protocol.player.GameMode
-import com.github.retrooper.packetevents.protocol.player.TextureProperty
-import com.github.retrooper.packetevents.protocol.player.UserProfile
+import com.github.retrooper.packetevents.protocol.item.ItemStack
+import com.github.retrooper.packetevents.protocol.item.type.ItemTypes
+import com.github.retrooper.packetevents.protocol.player.*
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerDestroyEntities
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityAnimation
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityEquipment
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityMetadata
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerInfo
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerSpawnPlayer
@@ -39,7 +40,17 @@ class NPC(
     var sneaking = false
     private var lastSprinting = false
     var sprinting = false
+    private var lastBlocking = false
+    var blocking = true
+
+    var hitTick = false
+
     var onGround = true
+
+    private var lastItemInHand = 0
+    var itemInHand = 0
+    private var lastItemInHandMeta = 0.toByte()
+    var itemInHandMeta = 0.toByte()
 
     val observerList = mutableListOf<Player>()
 
@@ -68,13 +79,19 @@ class NPC(
             WrapperPlayServerEntityAnimation.EntityAnimationType.SWING_MAIN_ARM
         ).send(observer)
 
-        if (sneaking || sprinting) {
+        if (sneaking || sprinting || blocking) {
             var state = 0
             if (sneaking) state = state or 0x02
             if (sprinting) state = state or 0x08
+            if (blocking) state = state or 0x10
 
             WrapperPlayServerEntityMetadata(entityId, listOf(EntityData(0, EntityDataTypes.BYTE, state.toByte())))
                 .send(observer)
+        }
+
+        if (itemInHand != 0) {
+            val heldItem = ItemStack.builder().type(ItemTypes.getById(ClientVersion.V_1_8, 0)).legacyData(0).build()
+            WrapperPlayServerEntityEquipment(entityId, listOf(Equipment(EquipmentSlot.MAIN_HAND, heldItem)))
         }
 
         observerList.add(observer)
@@ -82,6 +99,12 @@ class NPC(
 
     fun removeObserver(observer: Player) {
         WrapperPlayServerDestroyEntities(entityId).send(observer)
+        WrapperPlayServerPlayerInfo(
+            WrapperPlayServerPlayerInfo.Action.REMOVE_PLAYER, WrapperPlayServerPlayerInfo.PlayerData(
+                null, profile, GameMode.ADVENTURE, 0
+            )
+        ).send(observer)
+
         observerList.remove(observer)
     }
 
@@ -102,15 +125,29 @@ class NPC(
     fun tick() {
         observerList.removeIf { !it.isOnline }
 
-        if (lastSneaking != sneaking || lastSprinting != sprinting) {
+        if (lastSneaking != sneaking || lastSprinting != sprinting || lastBlocking != blocking) {
             var state = 0
             if (sneaking) state = state or 0x02
             if (sprinting) state = state or 0x08
+            if (blocking) state = state or 0x10
 
             WrapperPlayServerEntityMetadata(entityId, listOf(EntityData(0, EntityDataTypes.BYTE, state.toByte())))
                 .send(observerList)
             lastSneaking = sneaking
             lastSprinting = sprinting
+        }
+
+        if (lastItemInHand != itemInHand || lastItemInHandMeta != itemInHandMeta) {
+            val heldItem = ItemStack.builder().type(ItemTypes.getById(ClientVersion.V_1_8, itemInHand)).legacyData(itemInHandMeta.toInt()).build()
+            WrapperPlayServerEntityEquipment(entityId, listOf(Equipment(EquipmentSlot.MAIN_HAND, heldItem))).send(observerList)
+
+            lastItemInHand = itemInHand
+            lastItemInHandMeta = itemInHandMeta
+        }
+
+        if (hitTick) {
+            animate()
+            hitTick = false
         }
 
         runMovement()
@@ -160,8 +197,13 @@ class NPC(
 
         sneaking = snapshot.sneaking
         sprinting = snapshot.sprinting
+        blocking = snapshot.blocking
+
         onGround = snapshot.onGround
 
-        // TODO: item in hand
+        itemInHand = snapshot.itemInHand
+        itemInHandMeta = snapshot.itemInHandData
+
+        hitTick = snapshot.hitTick
     }
 }
